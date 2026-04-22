@@ -1,0 +1,27 @@
+{
+  "name": "cineclub-reunion-dal",
+  "version": "1.0.0",
+  "description": "CP8-SC1 — Data Access Layer pour CinéClub Réunion",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node src/index.ts"
+  },
+  "keywords": ["cineclub", "dal", "mysql", "mongodb"],
+  "author": "Evan",
+  "license": "ISC",
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "express": "^4.21.1",
+    "mongoose": "^8.9.5",
+    "mysql2": "^3.12.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.10.5",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.3"
+  }
+}

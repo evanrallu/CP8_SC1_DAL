@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install *)",
+      "Bash(npm run *)",
+      "Bash(mysql --version)",
+      "Bash(mongod --version)",
+      "Bash(mongo --version)",
+      "Bash(mongosh --version)",
+      "PowerShell(Get-Service | Where-Object { $_.Name -match 'mysql|mongo|mariadb' } | Format-Table Name, Status, StartType -AutoSize)",
+      "PowerShell(Test-NetConnection -ComputerName localhost -Port 3306 -InformationLevel Quiet)",
+      "PowerShell(Test-NetConnection -ComputerName localhost -Port 27017 -InformationLevel Quiet)",
+      "Bash(docker --version)",
+      "Bash(docker compose *)",
+      "Bash(curl -s http://localhost:3001/health)",
+      "Bash(code \"C:/Users/evans/OneDrive/Documentos/Claude/Projects/CDA/CP8_SC1_DAL\")",
+      "Bash(echo \"exit=$?\")",
+      "Bash(pandoc --track-changes=all \"C:/Users/evans/OneDrive/Documentos/Claude/Projects/CDA/CP8_SC1_DAL/Guide_CP8_SC1_DAL.docx\" -o \"C:/Users/evans/OneDrive/Documentos/Claude/Projects/CDA/CP8_SC1_DAL/Guide_CP8_SC1_DAL.md\")",
+      "PowerShell(python -m pip install python-docx --quiet 2>&1)",
+      "Bash(python .tmp_read_docx.py)",
+      "Bash(docker exec *)",
+      "Bash(curl -s http://localhost:3000/health)",
+      "Bash(netstat -ano)",
+      "Bash(findstr :3000)",
+      "Bash(gh auth *)"
+    ]
+  }
+}

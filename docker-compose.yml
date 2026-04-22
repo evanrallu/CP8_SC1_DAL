@@ -1,0 +1,44 @@
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: cineclub_mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: RootPass_Dev_Only_2026
+      MYSQL_DATABASE: cineclub
+      MYSQL_USER: cineclub_app
+      # $ doublé car docker-compose interprète $ comme une variable
+      MYSQL_PASSWORD: "K9!mX2$$vQ#8nBp"
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./sql/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-pRootPass_Dev_Only_2026"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  mongo:
+    image: mongo:7
+    container_name: cineclub_mongo
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: adminPass_Dev_Only_2026
+      MONGO_INITDB_DATABASE: cineclub_nosql
+    ports:
+      - "27018:27017"
+    volumes:
+      - mongo_data:/data/db
+      - ./sql/init-mongo:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "-u", "admin", "-p", "adminPass_Dev_Only_2026", "--authenticationDatabase", "admin", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 10s
+      retries: 10
+
+volumes:
+  mysql_data:
+  mongo_data:
