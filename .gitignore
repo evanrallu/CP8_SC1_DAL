@@ -1,0 +1,12 @@
+# Dépendances
+node_modules/
+
+# Variables d'environnement (NE JAMAIS commiter)
+.env
+
+# Build TypeScript
+dist/
+
+# Logs
+*.log
+npm-debug.log*
