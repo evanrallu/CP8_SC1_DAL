@@ -1,8 +1,10 @@
 # CinéClub Réunion — CP8 SC02 : CRUD Sécurisé SQL + NoSQL
 
 API Express en TypeScript exposant un CRUD sur deux bases :
-- **MySQL** (adhérents) — requêtes paramétrées + soft delete
+- **MySQL** (adhérents, films) — requêtes paramétrées + soft delete + recherche LIKE sécurisée
 - **MongoDB** (avis) — Mongoose + Zod en garde-fou anti-injection
+
+En complément, le projet illustre **4 patterns d'accès aux données** côte à côte sur la même entité Adhérent : Repository (production), DAO, Active Record et Unit of Work — exposés via `/demo/*` pour comparaison directe.
 
 ---
 
@@ -124,6 +126,7 @@ Sortie attendue :
 curl http://localhost:3000/health
 curl http://localhost:3000/adherents
 curl http://localhost:3000/avis/film/1
+curl "http://localhost:3000/films/search?q=Bonheur"
 ```
 
 > Ouvrir http://localhost:3000 directement renvoie `{"error":"Route GET / introuvable"}` — c'est **normal**, la racine n'est pas une route exposée. Le 404 prouve que le serveur répond.
@@ -135,22 +138,33 @@ curl http://localhost:3000/avis/film/1
 ```
 src/
 ├── config/
-│   └── env.ts                      ← Validation des .env avec Zod (crash fast)
+│   └── env.ts                        ← Validation des .env avec Zod (crash fast)
 ├── domain/
-│   ├── Adherent.ts                 ← Interface + DTO + mapper de sortie
-│   └── Avis.ts                     ← Interface + DTO + mapper de sortie
+│   ├── Adherent.ts                   ← Interface + DTO + mapper de sortie
+│   ├── Avis.ts                       ← Interface + DTO + mapper de sortie
+│   └── Film.ts                       ← Interface + DTO Film (createdAt filtré)
 ├── infra/
-│   ├── mysql.ts                    ← Pool MySQL singleton + helper transaction
-│   ├── mongodb.ts                  ← Connexion Mongoose
-│   ├── AdherentRepositoryMySQL.ts  ← CRUD SQL sécurisé (execute + ?)
-│   └── AvisRepository.ts           ← CRUD NoSQL (Mongoose + lean + runValidators)
+│   ├── mysql.ts                      ← Pool MySQL singleton + helper transaction
+│   ├── mongodb.ts                    ← Connexion Mongoose
+│   ├── AdherentRepositoryMySQL.ts    ← CRUD SQL sécurisé (execute + ?)
+│   ├── AvisRepository.ts             ← CRUD NoSQL (Mongoose + lean + runValidators)
+│   ├── FilmRepository.ts             ← Interface du contrat Film
+│   ├── FilmRepositoryMySQL.ts        ← Implémentation MySQL + searchByTitle (LIKE échappé)
+│   └── FilmRepositoryMemory.ts       ← Implémentation in-memory (tests sans BDD)
+├── patterns/                          ← Démo pédagogique des patterns alternatifs
+│   ├── AdherentDAO.ts                ← DAO : lignes BRUTES (snake_case, actif: 0/1)
+│   ├── AdherentActiveRecord.ts       ← Active Record : adherent.save() / .delete()
+│   └── UnitOfWork.ts                 ← UoW : batch atomique tout-ou-rien
 ├── schemas/
-│   ├── adherentSchemas.ts          ← Zod : Create/Update Adherent
-│   └── avisSchemas.ts              ← Zod : Create/Update/Moderation Avis
+│   ├── adherentSchemas.ts            ← Zod : Create/Update Adherent
+│   ├── avisSchemas.ts                ← Zod : Create/Update/Moderation Avis
+│   └── filmSchemas.ts                ← Zod : Create/Update/Search Film
 ├── routes/
-│   ├── adherents.ts                ← Routes Express /adherents
-│   └── avis.ts                     ← Routes Express /avis
-└── index.ts                        ← Bootstrap (crash fast si BDD injoignable)
+│   ├── adherents.ts                  ← Routes Express /adherents
+│   ├── avis.ts                       ← Routes Express /avis
+│   ├── films.ts                      ← Routes Express /films (+ /films/search)
+│   └── demo.ts                       ← Routes /demo/dao /demo/active-record /demo/uow
+└── index.ts                          ← Bootstrap (crash fast si BDD injoignable)
 ```
 
 ---
@@ -178,6 +192,30 @@ src/
 | PUT | `/avis/:id` | Met à jour un avis | 200 |
 | PATCH | `/avis/:id/moderation` | Change le statut (`publié` / `modéré` / `masqué`) | 200 |
 | DELETE | `/avis/:id` | Supprime l'avis | 204 |
+
+### Films (MySQL — exercice bonus)
+
+| Méthode | Route | Description | Code succès |
+|---------|-------|-------------|-------------|
+| GET | `/films` | Liste tous les films | 200 |
+| GET | `/films/search?q=...` | Recherche par titre (LIKE sécurisé, % et _ échappés) | 200 |
+| GET | `/films/:id` | Récupère un film | 200 |
+| POST | `/films` | Crée un film | 201 |
+| PUT | `/films/:id` | Met à jour (champs partiels) | 200 |
+| DELETE | `/films/:id` | Supprime un film | 204 |
+
+> Le route `/films/search` est déclarée **avant** `/films/:id` pour que le mot `search` ne soit pas interprété comme un id.
+> Architecture : les routes `/films` dépendent de l'interface `FilmRepository` — l'implémentation (`MySQL` ou `Memory`) est injectée à la construction (`buildFilmsRouter(repo)`).
+
+### Démo des patterns d'accès aux données (illustration pédagogique)
+
+Mêmes données (table `adherent`), 3 styles d'accès différents pour comparer avec le Repository de référence (`/adherents`).
+
+| Méthode | Route | Pattern | Marque distinctive |
+|---------|-------|---------|--------------------|
+| GET / POST | `/demo/dao/adherents[/:id]` | **DAO** | Renvoie la **ligne brute** (`actif: 1`, `date_inscription` snake_case). Pas de mapping vers le domaine. |
+| GET / POST / PUT / DELETE | `/demo/active-record/adherents[/:id]` | **Active Record** | L'entité elle-même porte `save()` / `deactivate()` / `delete()`. |
+| POST | `/demo/uow/inscription-batch` | **Unit of Work** | Batch atomique tout-ou-rien : un seul email en doublon → rollback de tous les inserts. |
 
 ### Codes d'erreur typiques
 
@@ -218,6 +256,27 @@ curl -X PATCH http://localhost:3000/avis/<MONGO_ID>/moderation \
 
 # Récupérer les avis d'un film
 curl http://localhost:3000/avis/film/1
+
+# Créer un film
+curl -X POST http://localhost:3000/films \
+  -H "Content-Type: application/json" \
+  -d '{"titre":"Le Bonheur des uns","realisateur":"Pierre Moreau","annee":2023,"dureeMinutes":115,"genre":"drame"}'
+
+# Recherche par titre (LIKE sécurisé)
+curl "http://localhost:3000/films/search?q=Bonheur"
+
+# Démo DAO — renvoie la ligne brute (snake_case, actif: 1)
+curl http://localhost:3000/demo/dao/adherents/1
+
+# Démo Active Record — l'entité s'auto-persiste
+curl -X POST http://localhost:3000/demo/active-record/adherents \
+  -H "Content-Type: application/json" \
+  -d '{"nom":"Hoarau","prenom":"Jean","email":"jhoarau@cineclub.re","telephone":"0692333444"}'
+
+# Démo Unit of Work — batch atomique (rollback complet si un email est en doublon)
+curl -X POST http://localhost:3000/demo/uow/inscription-batch \
+  -H "Content-Type: application/json" \
+  -d '[{"nom":"A","prenom":"B","email":"a@x.re"},{"nom":"C","prenom":"D","email":"c@x.re"}]'
 ```
 
 ---
@@ -225,10 +284,12 @@ curl http://localhost:3000/avis/film/1
 ## Sécurité (notes pédagogiques)
 
 - **SQL** — `mysql2.execute()` avec placeholders `?` → requêtes paramétrées, pas d'injection SQL.
+- **LIKE sécurisé** — `FilmRepositoryMySQL.searchByTitle()` échappe `%`, `_` et `\` côté valeur **avant** d'ajouter les wildcards englobants. Un titre "100%" reste un littéral, il ne devient pas un wildcard SQL.
 - **NoSQL** — Zod force `z.string()` / `z.number()` sur chaque champ, ce qui rejette les opérateurs MongoDB injectés (ex: `{"$ne": null}`). Mongoose en `strict: true` ignore les champs hors schéma.
-- **Sortie** — DTO `toAdherentDTO` / `toAvisDTO` filtrent les champs internes (statut de modération, flags) avant la réponse JSON.
+- **Sortie** — DTO `toAdherentDTO` / `toAvisDTO` / `toFilmDTO` filtrent les champs internes (statut de modération, `actif`, `createdAt`) avant la réponse JSON.
 - **Crash fast** — `src/index.ts` teste les deux connexions BDD avant `app.listen`. Si l'une échoue, le process exit(1) immédiatement → jamais de serveur dans un état dégradé.
 - **Moindre privilège** — `cineclub_user` a uniquement `SELECT/INSERT/UPDATE/DELETE` sur la base applicative, pas de `DROP` ni de `GRANT`.
+- **Atomicité (UoW)** — `src/patterns/UnitOfWork.ts` enveloppe un lot d'opérations dans une transaction MySQL avec ROLLBACK automatique sur erreur, garantissant la cohérence inter-tables.
 
 ---
 

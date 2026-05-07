@@ -14,6 +14,8 @@ import { connectMongo } from './infra/mongodb';
 // Import des routeurs
 import adherentsRouter from './routes/adherents';
 import avisRouter from './routes/avis';
+import filmsRouter from './routes/films';
+import demoRouter from './routes/demo';
 
 const app = express();
 
@@ -24,6 +26,8 @@ app.use(express.urlencoded({ extended: false }));
 // ─── Routes ────────────────────────────────────────────────────────────────
 app.use('/adherents', adherentsRouter);
 app.use('/avis', avisRouter);
+app.use('/films', filmsRouter);
+app.use('/demo', demoRouter);   // Démo des patterns DAO / Active Record / Unit of Work
 
 // Route de santé — utile pour vérifier que le serveur répond
 app.get('/health', (req, res) => {
