@@ -17,7 +17,8 @@
     "test:reserve": "node scripts/test-sc03.mjs reserve",
     "test:concurrent": "node scripts/test-sc03.mjs concurrent",
     "test:archive": "node scripts/test-sc03.mjs archive",
-    "test:audit": "node scripts/test-sc03.mjs audit"
+    "test:audit": "node scripts/test-sc03.mjs audit",
+    "test:cp8sc3": "node scripts/test-sc03.mjs rollback && node scripts/test-sc03.mjs archive && node scripts/test-sc03.mjs audit"
   },
   "dependencies": {
     "dotenv": "^16.4.5",
