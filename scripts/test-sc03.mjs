@@ -159,7 +159,99 @@ async function testArchive() {
 }
 
 // ───────────────────────────────────────────────────────────────────────────
-const tests = { rollback: testRollback, reserve: testReserve, concurrent: testConcurrent, archive: testArchive };
+// TEST 5 — Trigger audit : UPDATE "touch" (même valeur) ignoré,
+// UPDATE réel (changement de statut) → +1 ligne dans audit_log
+// ───────────────────────────────────────────────────────────────────────────
+async function testAudit() {
+  console.log('🧪 TEST AUDIT — trg_paiement_audit_update doit ignorer les UPDATE "touch"\n');
+  const conn = await db();
+
+  // Créer une réservation+paiement de référence si la base est vide
+  const [pRows] = await conn.execute('SELECT id, statut FROM paiement ORDER BY id DESC LIMIT 1');
+  let paiementId, statutInitial;
+
+  if (pRows.length === 0) {
+    console.log('  Aucun paiement existant → création via POST /reservations…');
+    const r = await fetch(`${API}/reservations`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ adherentId: 1, seanceId: 2, montantCents: 1500 }),
+    });
+    const body = await r.json();
+    if (r.status !== 201) {
+      console.log(`❌ Impossible de créer une réservation : HTTP ${r.status}`, body);
+      await conn.end();
+      process.exit(1);
+    }
+    const [fresh] = await conn.execute('SELECT id, statut FROM paiement WHERE id = LAST_INSERT_ID()');
+    paiementId    = fresh[0]?.id ?? body.reservationId;
+    statutInitial = fresh[0]?.statut ?? 'EN_ATTENTE';
+  } else {
+    paiementId    = pRows[0].id;
+    statutInitial = pRows[0].statut;
+  }
+
+  console.log(`  Paiement cible : id=${paiementId}, statut="${statutInitial}"`);
+
+  const [a0] = await conn.execute(
+    'SELECT COUNT(*) AS n FROM audit_log WHERE table_name = "paiement" AND row_id = ?',
+    [paiementId],
+  );
+  const auditBefore = a0[0].n;
+  console.log(`  ${pad('audit_log')} : ${auditBefore} ligne(s) avant`);
+
+  // ── ① UPDATE "touch" : même statut → trigger doit IGNORER ───────────────
+  await conn.execute('UPDATE paiement SET statut = ? WHERE id = ?', [statutInitial, paiementId]);
+  const [a1] = await conn.execute(
+    'SELECT COUNT(*) AS n FROM audit_log WHERE table_name = "paiement" AND row_id = ?',
+    [paiementId],
+  );
+  const auditAfterTouch = a1[0].n;
+  console.log(`  Après UPDATE "touch" (statut → ${statutInitial}) : ${auditAfterTouch} ligne(s)`);
+
+  // ── ② UPDATE réel : changement de statut → trigger doit INSÉRER ────────
+  const nouveauStatut = statutInitial === 'VALIDE' ? 'REMBOURSE' : 'VALIDE';
+  await conn.execute('UPDATE paiement SET statut = ? WHERE id = ?', [nouveauStatut, paiementId]);
+  const [a2] = await conn.execute(
+    'SELECT COUNT(*) AS n FROM audit_log WHERE table_name = "paiement" AND row_id = ? ORDER BY id DESC',
+    [paiementId],
+  );
+  const auditAfterReal = a2[0].n;
+  console.log(`  Après UPDATE réel  (statut → ${nouveauStatut}) : ${auditAfterReal} ligne(s)`);
+
+  // Inspecter la dernière entrée d'audit
+  const [last] = await conn.execute(
+    `SELECT action, changed_by, old_value, new_value
+       FROM audit_log
+      WHERE table_name = 'paiement' AND row_id = ?
+      ORDER BY id DESC LIMIT 1`,
+    [paiementId],
+  );
+  if (last.length) {
+    console.log(`  Dernière entrée audit_log :`, {
+      action:     last[0].action,
+      changed_by: last[0].changed_by,
+      old:        last[0].old_value,
+      new:        last[0].new_value,
+    });
+  }
+
+  await conn.end();
+
+  const touchIgnored = auditAfterTouch === auditBefore;
+  const realLogged   = auditAfterReal  === auditBefore + 1;
+  const ok           = touchIgnored && realLogged;
+
+  console.log(
+    ok ? '\n✅ Trigger correct — touch ignoré, changement réel audité'
+       : `\n❌ Trigger défaillant — touch=${touchIgnored ? 'ok' : `+${auditAfterTouch - auditBefore}`}, ` +
+         `réel=${realLogged ? 'ok' : `+${auditAfterReal - auditBefore} (attendu +1)`}`,
+  );
+  process.exit(ok ? 0 : 1);
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+const tests = { rollback: testRollback, reserve: testReserve, concurrent: testConcurrent, archive: testArchive, audit: testAudit };
 const cmd   = process.argv[2];
 const fn    = tests[cmd];
 
