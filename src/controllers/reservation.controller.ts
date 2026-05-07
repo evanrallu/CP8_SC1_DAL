@@ -11,7 +11,7 @@
  *  Délai exponentiel : 30ms × attempt (30ms, 60ms, 90ms).
  *  Après MAX_RETRIES échecs → HTTP 409.
  */
-import { Request, Response } from 'express';
+import { Request, Response, NextFunction } from 'express';
 import { CreateReservationSchema } from '../schemas/reservationSchemas';
 import { reserver, SeanceNotFoundError, NoSeatsError } from '../services/ReservationService';
 import {
@@ -23,7 +23,7 @@ import {
 
 // ─── Pessimiste (Livrable 1) ───────────────────────────────────────────────
 
-export async function postReservation(req: Request, res: Response) {
+export async function postReservation(req: Request, res: Response, next: NextFunction) {
   const parsed = CreateReservationSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({
@@ -43,7 +43,9 @@ export async function postReservation(req: Request, res: Response) {
     if (e instanceof NoSeatsError) {
       return res.status(409).json({ error: e.message });
     }
-    throw e; // erreur inattendue → gestionnaire global → HTTP 500
+    // erreur inattendue → gestionnaire global Express (next, pas throw, sinon
+    // unhandled promise rejection → crash du process en Express 4)
+    return next(e);
   }
 }
 
@@ -52,7 +54,7 @@ export async function postReservation(req: Request, res: Response) {
 const MAX_RETRIES   = 3;
 const RETRY_DELAY   = 30; // ms
 
-export async function postReservationOpti(req: Request, res: Response) {
+export async function postReservationOpti(req: Request, res: Response, next: NextFunction) {
   const parsed = CreateReservationSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({
@@ -85,7 +87,7 @@ export async function postReservationOpti(req: Request, res: Response) {
       if (e instanceof NoSeatsErrorOpti) {
         return res.status(409).json({ error: e.message });
       }
-      throw e;
+      return next(e);
     }
   }
 }

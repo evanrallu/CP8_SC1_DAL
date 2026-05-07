@@ -12,7 +12,11 @@
     "db:up": "docker compose up -d --wait",
     "db:down": "docker compose down",
     "db:reset": "docker compose down -v && docker compose up -d --wait",
-    "db:logs": "docker compose logs -f"
+    "db:logs": "docker compose logs -f",
+    "test:rollback": "node scripts/test-sc03.mjs rollback",
+    "test:reserve": "node scripts/test-sc03.mjs reserve",
+    "test:concurrent": "node scripts/test-sc03.mjs concurrent",
+    "test:archive": "node scripts/test-sc03.mjs archive"
   },
   "dependencies": {
     "dotenv": "^16.4.5",
