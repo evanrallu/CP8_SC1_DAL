@@ -12,35 +12,32 @@ import { testConnection } from './infra/mysql';
 import { connectMongo } from './infra/mongodb';
 
 // Import des routeurs
-import adherentsRouter from './routes/adherents';
-import avisRouter from './routes/avis';
-import filmsRouter from './routes/films';
-import demoRouter from './routes/demo';
+import adherentsRouter    from './routes/adherents';
+import avisRouter         from './routes/avis';
+import reservationsRouter from './routes/reservations';   // ← SC03
 
 const app = express();
 
 // ─── Middlewares globaux ────────────────────────────────────────────────────
-app.use(express.json());               // parse le body JSON
+app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
 // ─── Routes ────────────────────────────────────────────────────────────────
-app.use('/adherents', adherentsRouter);
-app.use('/avis', avisRouter);
-app.use('/films', filmsRouter);
-app.use('/demo', demoRouter);   // Démo des patterns DAO / Active Record / Unit of Work
+app.use('/adherents',    adherentsRouter);
+app.use('/avis',         avisRouter);
+app.use('/reservations', reservationsRouter);  // ← SC03
 
-// Route de santé — utile pour vérifier que le serveur répond
+// Route de santé
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', env: env.NODE_ENV, timestamp: new Date().toISOString() });
 });
 
-// ─── Gestion des routes inconnues ──────────────────────────────────────────
+// ─── 404 ───────────────────────────────────────────────────────────────────
 app.use((req, res) => {
   res.status(404).json({ error: `Route ${req.method} ${req.path} introuvable` });
 });
 
 // ─── Gestionnaire d'erreurs global ─────────────────────────────────────────
-// Capture toutes les erreurs non gérées dans les routes async
 app.use((err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
   console.error('❌ Erreur non gérée :', err);
   res.status(500).json({
@@ -51,21 +48,20 @@ app.use((err: Error, req: express.Request, res: express.Response, next: express.
 // ─── Démarrage ─────────────────────────────────────────────────────────────
 async function bootstrap() {
   console.log('🚀 Démarrage de CinéClub Réunion API...');
-
-  // Connexions BDD obligatoires avant d'accepter du trafic
-  await testConnection();   // MySQL — crash si injoignable
-  await connectMongo();     // MongoDB — crash si injoignable
-
-  // Le serveur écoute seulement si les deux BDD sont prêtes
+  await testConnection();
+  await connectMongo();
   app.listen(env.PORT, () => {
     console.log(`\n🎬 CinéClub Réunion API démarrée`);
     console.log(`   ➜ http://localhost:${env.PORT}`);
     console.log(`   ➜ http://localhost:${env.PORT}/health`);
     console.log(`   ➜ Environnement : ${env.NODE_ENV}\n`);
+    console.log('   ─── Routes SC03 ───────────────────────────────');
+    console.log(`   POST /reservations          (pessimiste FOR UPDATE)`);
+    console.log(`   POST /reservations/opti     (optimiste version + retry)`);
+    console.log(`   POST /reservations/archive  (procédure sp_archive_old_seances)`);
   });
 }
 
-// Lance le bootstrap et attrape les erreurs fatales
 bootstrap().catch((err) => {
   console.error('❌ Échec du démarrage :', err);
   process.exit(1);

@@ -4,9 +4,15 @@
   "description": "CinéClub Réunion — API CP8 SC02 (SQL + NoSQL + Zod + DTO)",
   "main": "dist/index.js",
   "scripts": {
+    "predev": "docker compose up -d --wait",
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
     "build": "tsc",
-    "start": "node dist/index.js"
+    "prestart": "docker compose up -d --wait",
+    "start": "node dist/index.js",
+    "db:up": "docker compose up -d --wait",
+    "db:down": "docker compose down",
+    "db:reset": "docker compose down -v && docker compose up -d --wait",
+    "db:logs": "docker compose logs -f"
   },
   "dependencies": {
     "dotenv": "^16.4.5",
